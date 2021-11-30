@@ -1,9 +1,9 @@
 import numpy as np
-np.random.seed(1234)
-torch.manual_seed(1234)
-
 import torch
 import torchaudio
+
+np.random.seed(1234)
+torch.manual_seed(1234)
 
 import scipy.stats
 from utils import parse_filelist
