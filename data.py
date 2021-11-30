@@ -1,11 +1,12 @@
 import numpy as np
+
 import torch
 import torchaudio
+from torchaudio.transforms import MelSpectrogram
 
-np.random.seed(1234)
 torch.manual_seed(1234)
+np.random.seed(1234)
 
-import scipy.stats
 from utils import parse_filelist
 
 
@@ -90,3 +91,19 @@ class ChannelMasking(torch.nn.Module):
         output = batch * channel_mask   # masking
 
         return output
+
+
+class MelSpectrogramFixed(torch.nn.Module):
+    """
+    make some mel_spec shit
+    """
+    def __init__(self, **kwargs):
+        super(MelSpectrogramFixed, self).__init__()
+        self.torchaudio_backend = MelSpectrogram(**kwargs)
+
+    def forward(self, x):
+        outputs = 20 * self.torchaudio_backend(x).log10()
+        # Clipping mel-spec value on [-70, 30]
+        outputs[outputs < -70] = -70
+        outputs[outputs > 30] = 30
+        return outputs

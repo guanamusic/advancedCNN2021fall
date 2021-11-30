@@ -3,8 +3,14 @@
         "LReLU_ratio": 0.2
     },
     "data_config": {
+        "segment_length_in_ms": 3000,
+        "n_channel": 6,
         "sample_rate": 16000,
-        "n_channel": 6
+        "n_fft": 1024,
+        "hop_length": 256,
+        "f_min": 80.0,
+        "f_max": 8000,
+        "n_mels": 128
     },
     "training_config": {
         "logdir": "logs/default",
