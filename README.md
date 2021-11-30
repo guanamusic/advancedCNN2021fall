@@ -13,9 +13,9 @@
 ## Getting Started (Training & Testing)
 - Train:
 ```
-python train.py -c configs/default.json
+sh runs/train.sh
 ```
-- Test:
+- Inference:
 ```
-
+sh runs/inference.sh
 ```
