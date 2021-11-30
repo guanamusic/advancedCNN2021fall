@@ -11,6 +11,10 @@
 - tensorboard
 
 ## Getting Started (Training & Testing)
+- Preprocessing (to make mel-spectrogram from audio):
+```
+sh runs/preprocessing.sh
+```
 - Train:
 ```
 sh runs/train.sh
