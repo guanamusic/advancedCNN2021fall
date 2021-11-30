@@ -4,8 +4,8 @@ import torch
 import torchaudio
 from torchaudio.transforms import MelSpectrogram
 
-torch.manual_seed(1234)
 np.random.seed(1234)
+torch.manual_seed(1234)
 
 from utils import parse_filelist
 

@@ -31,22 +31,31 @@ def run_preprocessing(config, audio_path, target_path):
         n_mels=config.data_config.n_mels,
         window_fn=torch.hann_window
     )
-    n_file = len(sorted(os.listdir(audio_path)))
-    assert n_file % config.data_config.n_channel == 0, '# of file is not a multiple of # of channel.'
-    filelist = np.reshape(np.array(sorted(os.listdir(audio_path))), (n_file//6, 6))
-    for filenames in filelist:
-        assert filenames[0][:-8]==filenames[-1][:-8], f'Name sync error!'
-        multichannel_audio = []
-        for filename in filenames:
-            audio, _ = torchaudio.load(audio_path + filename)
-            if audio.size()[-1] < audio_length:
-                padder = torch.nn.ConstantPad1d((0, audio_length - audio.size()[-1]), 0)
-                audio = padder(audio)
-            multichannel_audio.append(audio.squeeze()[:audio_length])
-        multichannel_audio = torch.stack((multichannel_audio))
-        # [6, 128, 390]
-        multichannel_melspec = melSpec(multichannel_audio)
-        torch.save(multichannel_melspec, target_path + filenames[0][:-8] + '.pt')
+
+    audio_dirs = sorted(os.listdir(audio_path))
+    for audio_dir in audio_dirs:
+        if os.path.exists(target_path + audio_dir):
+            raise RuntimeError(
+                f"You're trying to run preprocessing from scratch, "
+                f"but target directory `{target_path} already exists. Remove it or specify new one.`"
+            )
+        os.makedirs(target_path + audio_dir)
+        n_file = len(sorted(os.listdir(audio_path + audio_dir + '/')))
+        assert n_file % config.data_config.n_channel == 0, '# of file is not a multiple of # of channel.'
+        filelist = np.reshape(np.array(sorted(os.listdir(audio_path + audio_dir + '/'))), (n_file//6, 6))
+        for filenames in filelist:
+            assert filenames[0][:-8]==filenames[-1][:-8], f'Name sync error!'
+            multichannel_audio = []
+            for filename in filenames:
+                audio, _ = torchaudio.load(audio_path + audio_dir + '/' + filename)
+                if audio.size()[-1] < audio_length:
+                    padder = torch.nn.ConstantPad1d((0, audio_length - audio.size()[-1]), 0)
+                    audio = padder(audio)
+                multichannel_audio.append(audio.squeeze()[:audio_length])
+            multichannel_audio = torch.stack((multichannel_audio))
+            # [6, 128, 390]
+            multichannel_melspec = melSpec(multichannel_audio)
+            torch.save(multichannel_melspec, target_path + audio_dir + '/' + filenames[0][:-8] + '.pt')
 
 
 if __name__ == '__main__':
