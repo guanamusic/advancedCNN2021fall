@@ -19,7 +19,7 @@ class Conv1dWithInitialization(BaseModule):
 
     def forward(self, x):
         return self.conv1d(x)
-
+# Let's check the pr
 class ContextualAttention(nn.Module):
     def __init__(self, ksize=3, stride=1, rate=1, fuse_k=3, softmax_scale=10,
                  fuse=False, use_cuda=False, device_ids=None):
