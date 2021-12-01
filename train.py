@@ -168,8 +168,8 @@ def cleanup():
 
 
 if __name__ == '__main__':
-    torch.manual_seed(1234)     # set the initial torch seed
-    np.random.seed(1234)        # set the initial random seed
+    torch.manual_seed(1234)
+    np.random.seed(1234)
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', required=True, type=str, help='configuration file')
@@ -177,18 +177,18 @@ if __name__ == '__main__':
         '-v', '--verbose', required=False, type=str2bool,
         nargs='?', const=True, default=True, help='verbosity level'
     )
-    args = parser.parse_args()                  # Save variables from the shell as argparse elements
+    args = parser.parse_args()
 
     with open(args.config) as f:
-        config = ConfigWrapper(**json.load(f)) # Recall the json data as config
+        config = ConfigWrapper(**json.load(f))
 
-    torch.backends.cudnn.enabled = True     # Enable cuDNN
-    torch.backends.cudnn.benchmark = True   # Causes cuDNN to benchmark multiple convolution algorithms and select the fastest.
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
 
-    n_gpus = torch.cuda.device_count()      # Count all the gpus available
+    n_gpus = torch.cuda.device_count()
     args.__setattr__('n_gpus', n_gpus)
 
     if args.n_gpus > 1:
-        run_distributed(run_training, config, args)     # Distribute the function to available gpus
+        run_distributed(run_training, config, args)
     else:
-        run_training(0, config, args)                   # If only single gpu is availeble, just run the training part
+        run_training(0, config, args)
