@@ -15,8 +15,9 @@
     "training_config": {
         "logdir": "logs/default",
         "continue_training": false,
-        "train_filelist_path": "filelists/train.txt",
-        "test_filelist_path": "filelists/test.txt",
+        "train_file_path": "chime_3_simu_only_melspec/train/",
+        "validation_file_path": "chime_3_simu_only_melspec/validation/",
+        "test_file_path": "chime_3_simu_only_melspec/test/",
         "batch_size": 64,
         "lr": 1e-4,
         "grad_clip_threshold": 1,
