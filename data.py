@@ -90,7 +90,7 @@ class ChannelMasking(torch.nn.Module):
         assert channel_mask.size() == batch.size(), "WHAT ON EARTH IS GOING ON??????"
         output = batch * channel_mask   # masking
 
-        return output
+        return output, masked_channel
 
 
 class MelSpectrogramFixed(torch.nn.Module):
