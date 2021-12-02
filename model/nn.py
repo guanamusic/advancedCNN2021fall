@@ -5,7 +5,6 @@ from model.base import BaseModule
 import torch.nn.functional as F
 from layers import gen_conv, ContextualAttention
 
-
 class NeuralNetwork(BaseModule):
     def __init__(self, config, use_cuda, device_ids):
         super(NeuralNetwork, self).__init__()
