@@ -7,12 +7,14 @@ import torch
 import torchaudio
 
 from data import MelSpectrogramFixed
-from utils import ConfigWrapper
+from utils import ConfigWrapper, show_message
+from datetime import datetime
 
 
 def run_preprocessing(config, audio_path, target_path):
     """
     Provides mel-spectrogram dataset for given audio.
+    Warning: CUDA computing is not supported yet.
     """
     if os.path.exists(target_path):
         raise RuntimeError(
@@ -32,17 +34,16 @@ def run_preprocessing(config, audio_path, target_path):
         window_fn=torch.hann_window
     )
 
+    os.makedirs(target_path + 'train/')
+    os.makedirs(target_path + 'validation/')
+    os.makedirs(target_path + 'test/')
+
     audio_dirs = sorted(os.listdir(audio_path))
     for audio_dir in audio_dirs:
-        if os.path.exists(target_path + audio_dir):
-            raise RuntimeError(
-                f"You're trying to run preprocessing from scratch, "
-                f"but target directory `{target_path} already exists. Remove it or specify new one.`"
-            )
-        os.makedirs(target_path + audio_dir)
         n_file = len(sorted(os.listdir(audio_path + audio_dir + '/')))
         assert n_file % config.data_config.n_channel == 0, '# of file is not a multiple of # of channel.'
         filelist = np.reshape(np.array(sorted(os.listdir(audio_path + audio_dir + '/'))), (n_file//6, 6))
+
         for filenames in filelist:
             assert filenames[0][:-8]==filenames[-1][:-8], f'Name sync error!'
             multichannel_audio = []
@@ -55,7 +56,17 @@ def run_preprocessing(config, audio_path, target_path):
             multichannel_audio = torch.stack((multichannel_audio))
             # [6, 128, 390]
             multichannel_melspec = melSpec(multichannel_audio)
-            torch.save(multichannel_melspec, target_path + audio_dir + '/' + filenames[0][:-8] + '.pt')
+
+            if audio_dir[:4] == 'tr05':
+                target_tag = 'train/'
+            elif audio_dir[:4] == 'et05':
+                target_tag = 'validation/'
+            elif audio_dir[:4] == 'dt05':
+                target_tag = 'test/'
+            else:
+                assert 0, f"Something is going wrong.... Check your CHiME-3 dataset tag: {audio_dir[:4]}."
+
+            torch.save(multichannel_melspec, target_path + target_tag + filenames[0][:-8] + '.pt')
 
 
 if __name__ == '__main__':
@@ -77,4 +88,7 @@ if __name__ == '__main__':
     assert n_gpus == 1, 'Only one GPU is allowed.'
     args.__setattr__('n_gpus', n_gpus)
 
+    start = datetime.now()
     run_preprocessing(config=config, audio_path=audio_path, target_path=target_path)
+    end = datetime.now()
+    show_message(f'Done. preprocess time: {(end - start).total_seconds()}s.')

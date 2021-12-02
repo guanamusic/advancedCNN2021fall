@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from logger import Logger
 from model import Inpainter
-from data import AudioDataset, ChannelMasking
+from data import MelSpecDataset, ChannelMasking
 from utils import ConfigWrapper, show_message, str2bool
 
 
@@ -28,6 +28,8 @@ def run_training(rank, config, args):
     show_message('Initializing model...', verbose=args.verbose, rank=rank)
     model = Inpainter(config).cuda()
     show_message(f'Number of CHANNEL INPAINTER parameters: {model.nparams}', verbose=args.verbose, rank=rank)
+
+    # not yet applied on training procedure: channel masking
     channel_masking = ChannelMasking(config).cuda()
 
     show_message('Initializing optimizer, scheduler and losses...', verbose=args.verbose, rank=rank)
@@ -44,7 +46,7 @@ def run_training(rank, config, args):
         scaler = torch.cuda.amp.GradScaler()
 
     show_message('Initializing data loaders...', verbose=args.verbose, rank=rank)
-    train_dataset = AudioDataset(config, training=True)
+    train_dataset = MelSpecDataset(config, training=True)
     train_sampler = DistributedSampler(train_dataset) if args.n_gpus > 1 else None
     train_dataloader = DataLoader(
         train_dataset, batch_size=config.training_config.batch_size,
@@ -52,7 +54,7 @@ def run_training(rank, config, args):
     )
 
     if rank == 0:
-        validation_dataset = AudioDataset(config, training=False)
+        validation_dataset = MelSpecDataset(config, validation=True)
         validation_dataloader = DataLoader(validation_dataset)
 
     if config.training_config.continue_training:

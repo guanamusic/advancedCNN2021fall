@@ -1,63 +1,41 @@
+import os
 import numpy as np
 
 import torch
-import torchaudio
 from torchaudio.transforms import MelSpectrogram
 
 np.random.seed(1234)
 torch.manual_seed(1234)
 
-from utils import parse_filelist
 
-
-class AudioDataset(torch.utils.data.Dataset):
+class MelSpecDataset(torch.utils.data.Dataset):
     """
     Provides dataset management for given filelist.
     """
-    def __init__(self, config, training=True, validation=True):
-        super(AudioDataset, self).__init__()
+    def __init__(self, config, training=False, validation=False):
+        super(MelSpecDataset, self).__init__()
         self.config = config
         self.training = training
         self.validation = validation
 
-        self.segment_length = config.data_config.segment_length
-        self.sample_rate = config.data_config.sample_rate
+        assert not (self.training and self.validation), \
+            "Check whether the dataloader mode is training or validation."
 
-        self.filelist_path = config.training_config.train_filelist_path \
-            if self.training else config.training_config.test_filelist_path
-        self.audio_paths = parse_filelist(self.filelist_path)
+        if self.training:
+            self.file_path = config.training_config.train_file_path
+        elif self.validation:
+            self.file_path = config.training_config.validation_file_path
+        else:
+            self.file_path = config.training_config.test_file_path
 
-    def load_audio_to_torch(self, audio_path):
-        audio, sample_rate = torchaudio.load(audio_path)
-        # To ensure to create integer # segments will be processed in a right way for full signals
-        if not (self.training or self.validation):
-            p = (audio.shape[-1] // self.segment_length + 1) * self.segment_length - audio.shape[-1]
-            audio = torch.nn.functional.pad(audio, (0, p), mode='constant').data
-        return audio.squeeze(), sample_rate
+        self.filenames = os.listdir(self.file_path)
 
     def __getitem__(self, index):
-        audio_path = self.audio_paths[index]
-        audio, sample_rate = self.load_audio_to_torch(audio_path)
-
-        assert sample_rate == self.sample_rate, \
-            f"""Got path to audio of sampling rate {sample_rate}, \
-                but required {self.sample_rate} according config."""
-
-        if not (self.training or self.validation):  # If test
-            return audio
-        # Take segment of audio for training
-        if audio.shape[-1] > self.segment_length:
-            max_audio_start = audio.shape[-1] - self.segment_length
-            audio_start = np.random.randint(0, max_audio_start)
-            segment = audio[audio_start:audio_start+self.segment_length]
-        else:
-            segment = torch.nn.functional.pad(
-                audio, (0, self.segment_length - audio.shape[-1]), 'constant'
-            ).data
-        return segment
+        mel_spec = torch.load(self.file_path + self.filenames[index])
+        return mel_spec
 
     def __len__(self):
-        return len(self.audio_paths)
+        return len(self.filenames)
 
     def sample_test_batch(self, size):
         idx = np.random.choice(range(len(self)), size=size, replace=False)
