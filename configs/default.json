@@ -1,6 +1,7 @@
 {
     "model_config": {
-        "LReLU_ratio": 0.2
+        "generator_channel_factor": 32,
+        "discriminator_channel_factor": 64
     },
     "data_config": {
         "segment_length_in_ms": 3000,
