@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from model.base import BaseModule
-from model.layers import Conv1dWithInitialization
+from model.layers import Conv2dBlock
 
 
 class NeuralNetwork(BaseModule):

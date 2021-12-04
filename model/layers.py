@@ -6,15 +6,6 @@ from model.base import BaseModule
 Fill some basic layers that you want with specification
 """
 
-class Conv1dWithInitialization(BaseModule):
-    def __init__(self, **kwargs):
-        super(Conv1dWithInitialization, self).__init__()
-        self.conv1d = torch.nn.Conv1d(**kwargs)
-        torch.nn.init.orthogonal_(self.conv1d.weight.data, gain=1)
-
-    def forward(self, x):
-        return self.conv1d(x)
-
 
 class DepthwiseConv(BaseModule):
     def __init__(self, nin, kernels_per_layer, kernel_size):
@@ -24,3 +15,23 @@ class DepthwiseConv(BaseModule):
     def forward(self, x):
         out = self.depthwise(x)
         return out
+
+
+class Conv2dBlock(BaseModule):
+    def __init__(self, activation=None, **kwargs):
+        super(Conv2dBlock, self).__init__()
+        self.conv2d = torch.nn.Conv2d(**kwargs)
+
+        if activation == 'relu':
+            self.activation = torch.nn.ReLU()
+        elif activation == 'elu':
+            self.activation = torch.nn.ELU()
+        elif activation == 'lrelu':
+            self.activation = torch.nn.LeakyReLU(negative_slope=0.2)
+        elif activation == 'none':
+            self.activation = None
+        else:
+            raise Exception(f"Unsupported activation: {activation}")
+
+    def forward(self, x):
+        return self.activation(self.conv2d(x))
