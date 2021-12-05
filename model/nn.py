@@ -4,6 +4,7 @@ import numpy as np
 from model.base import BaseModule
 from model.layers import Conv2dBlock
 
+## Let's see if it's pushed directly
 
 class NeuralNetwork(BaseModule):
     """
