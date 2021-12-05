@@ -2,7 +2,7 @@ import os
 import argparse
 import json
 import numpy as np
-
+import easydict
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -172,17 +172,25 @@ def cleanup():
 if __name__ == '__main__':
     torch.manual_seed(1234)
     np.random.seed(1234)
+    ###### FOR PYTHON TRAINING ##########
+    CONFIG_PATH = 'configs/default.json'
+    f = open(CONFIG_PATH)
+    config = json.load(f)
+    verbose = 'yes'
+    args = easydict.EasyDict(config)
+    args.__setattr__('verbose', verbose)
+    ####### FOR SHELL TRAINING ##########
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('-c', '--config', required=True, type=str, help='configuration file')
+    # parser.add_argument(
+    #     '-v', '--verbose', required=False, type=str2bool,
+    #     nargs='?', const=True, default=True, help='verbosity level'
+    # )
+    # args = parser.parse_args()
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', required=True, type=str, help='configuration file')
-    parser.add_argument(
-        '-v', '--verbose', required=False, type=str2bool,
-        nargs='?', const=True, default=True, help='verbosity level'
-    )
-    args = parser.parse_args()
-
-    with open(args.config) as f:
-        config = ConfigWrapper(**json.load(f))
+    # with open(args.config) as f:
+    #     config = ConfigWrapper(**json.load(f))
+    #################################
 
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True

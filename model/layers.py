@@ -1,7 +1,12 @@
 import torch
-
+import torch.nn as nn
 from model.base import BaseModule
-
+import torch.nn.functional as F
+from utility.tools import extract_image_patches, flow_to_image, reduce_mean, reduce_sum, default_loader, same_padding
+from torch.nn.utils import spectral_norm as spectral_norm_fn
+from torch.nn.utils import weight_norm as weight_norm_fn
+from torchvision import transforms
+from torchvision import utils as vutils
 """
 Fill some basic layers that you want with specification
 """
@@ -15,7 +20,6 @@ class DepthwiseConv(BaseModule):
     def forward(self, x):
         out = self.depthwise(x)
         return out
-
 
 class Conv2dBlock(BaseModule):
     def __init__(self, activation=None, **kwargs):
