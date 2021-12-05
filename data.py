@@ -63,10 +63,9 @@ class ChannelMasking(torch.nn.Module):
         channel_mask = torch.nn.functional.one_hot(masked_channel,
                                                    num_classes=self.n_channel).unsqueeze(2).unsqueeze(3)
         channel_mask = channel_mask.expand_as(batch)
-        channel_mask = torch.ones_like(channel_mask) - channel_mask
 
         assert channel_mask.size() == batch.size(), "WHAT ON EARTH IS GOING ON??????"
-        output = batch * channel_mask   # masking
+        output = batch * (torch.ones_like(channel_mask) - channel_mask)   # masking
 
         return output, channel_mask
 
