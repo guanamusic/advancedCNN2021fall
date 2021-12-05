@@ -104,6 +104,120 @@ def reduce_sum(x, axis=None, keepdim=False):
 The below is also referred by daa233's repo, but IDK what the hell it is.
 """
 
+def random_bbox(config, batch_size):
+    """Generate a random tlhw with configuration.
+    Args:
+        config: Config should have configuration including img
+    Returns:
+        tuple: (top, left, height, width)
+    """
+    img_height, img_width, _ = config['image_shape']
+    h, w = config['mask_shape']
+    margin_height, margin_width = config['margin']
+    maxt = img_height - margin_height - h
+    maxl = img_width - margin_width - w
+    bbox_list = []
+    if config['mask_batch_same']:
+        t = np.random.randint(margin_height, maxt)
+        l = np.random.randint(margin_width, maxl)
+        bbox_list.append((t, l, h, w))
+        bbox_list = bbox_list * batch_size
+    else:
+        for i in range(batch_size):
+            t = np.random.randint(margin_height, maxt)
+            l = np.random.randint(margin_width, maxl)
+            bbox_list.append((t, l, h, w))
+
+    return torch.tensor(bbox_list, dtype=torch.int64)
+
+def test_random_bbox():
+    image_shape = [256, 256, 3]
+    mask_shape = [128, 128]
+    margin = [0, 0]
+    bbox = random_bbox(image_shape)
+    return bbox
+
+
+def bbox2mask(bboxes, height, width, max_delta_h, max_delta_w):
+    batch_size = bboxes.size(0)
+    mask = torch.zeros((batch_size, 1, height, width), dtype=torch.float32)
+    for i in range(batch_size):
+        bbox = bboxes[i]
+        delta_h = np.random.randint(max_delta_h // 2 + 1)
+        delta_w = np.random.randint(max_delta_w // 2 + 1)
+        mask[i, :, bbox[0] + delta_h:bbox[0] + bbox[2] - delta_h, bbox[1] + delta_w:bbox[1] + bbox[3] - delta_w] = 1.
+    return mask
+
+
+def test_bbox2mask():
+    image_shape = [256, 256, 3]
+    mask_shape = [128, 128]
+    margin = [0, 0]
+    max_delta_shape = [32, 32]
+    bbox = random_bbox(image_shape)
+    mask = bbox2mask(bbox, image_shape[0], image_shape[1], max_delta_shape[0], max_delta_shape[1])
+    return mask
+
+
+def local_patch(x, bbox_list):
+    assert len(x.size()) == 4
+    patches = []
+    for i, bbox in enumerate(bbox_list):
+        t, l, h, w = bbox
+        patches.append(x[i, :, t:t + h, l:l + w])
+    return torch.stack(patches, dim=0)
+
+
+def mask_image(x, bboxes, config):
+    height, width, _ = config['image_shape']
+    max_delta_h, max_delta_w = config['max_delta_shape']
+    mask = bbox2mask(bboxes, height, width, max_delta_h, max_delta_w)
+    if x.is_cuda:
+        mask = mask.cuda()
+
+    if config['mask_type'] == 'hole':
+        result = x * (1. - mask)
+    elif config['mask_type'] == 'mosaic':
+        # TODO: Matching the mosaic patch size and the mask size
+        mosaic_unit_size = config['mosaic_unit_size']
+        downsampled_image = F.interpolate(x, scale_factor=1. / mosaic_unit_size, mode='nearest')
+        upsampled_image = F.interpolate(downsampled_image, size=(height, width), mode='nearest')
+        result = upsampled_image * mask + x * (1. - mask)
+    else:
+        raise NotImplementedError('Not implemented mask type.')
+
+    return result, mask
+
+
+def spatial_discounting_mask(config):
+    """Generate spatial discounting mask constant.
+    Spatial discounting mask is first introduced in publication:
+        Generative Image Inpainting with Contextual Attention, Yu et al.
+    Args:
+        config: Config should have configuration including HEIGHT, WIDTH,
+            DISCOUNTED_MASK.
+    Returns:
+        tf.Tensor: spatial discounting mask
+    """
+    gamma = config['spatial_discounting_gamma']
+    height, width = config['mask_shape']
+    shape = [1, 1, height, width]
+    if config['discounted_mask']:
+        mask_values = np.ones((height, width))
+        for i in range(height):
+            for j in range(width):
+                mask_values[i, j] = max(
+                    gamma ** min(i, height - i),
+                    gamma ** min(j, width - j))
+        mask_values = np.expand_dims(mask_values, 0)
+        mask_values = np.expand_dims(mask_values, 0)
+    else:
+        mask_values = np.ones(shape)
+    spatial_discounting_mask_tensor = torch.tensor(mask_values, dtype=torch.float32)
+    if config['cuda']:
+        spatial_discounting_mask_tensor = spatial_discounting_mask_tensor.cuda()
+    return spatial_discounting_mask_tensor
+
 def flow_to_image(flow):
     """Transfer flow map to image.
     Part of code forked from flownet.
