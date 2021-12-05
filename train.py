@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from logger import Logger
 from model import Inpainter
-from data import MelSpecDataset, ChannelMasking
+from data import MelSpecDataset, ChannelMasking, channel_split_n_concat
 from utils import ConfigWrapper, show_message, str2bool
 
 
@@ -82,15 +82,19 @@ def run_training(rank, config, args):
                 model.zero_grad()
 
                 batch = batch.cuda()
-                masked = channel_masking(batch) # random channel is masked
+                masked_batch, mask = channel_masking(batch) # random channel is masked
+
+                batch = channel_split_n_concat(config, batch)
+                masked_batch = channel_split_n_concat(config, masked_batch)
+                mask = channel_split_n_concat(config, mask)
 
                 if config.training_config.use_fp16:
                     with torch.cuda.amp.autocast():
-                        loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked, batch)
+                        loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
                     scaler.scale(loss).backward()
                     scaler.unscale_(optimizer)
                 else:
-                    loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked, batch)
+                    loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
                     loss.backward()
 
                 grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -123,9 +127,13 @@ def run_training(rank, config, args):
                         if args.verbose and rank == 0 else validation_dataloader
                     ):
                         batch = batch.cuda()    # [1, audio_length]
-                        masked = channel_masking(batch)  # random channel is masked
+                        masked_batch, mask = channel_masking(batch)  # random channel is masked
 
-                        validation_loss_ = (model if args.n_gpus == 1 else model.module).compute_loss(masked, batch)
+                        batch = channel_split_n_concat(config, batch)
+                        masked_batch = channel_split_n_concat(config, masked_batch)
+                        mask = channel_split_n_concat(config, mask)
+
+                        validation_loss_ = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
                         validation_loss += validation_loss_
                     validation_loss /= (i + 1)
                     loss_stats = {'total_loss': validation_loss.item()}

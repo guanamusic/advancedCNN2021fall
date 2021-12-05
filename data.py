@@ -84,3 +84,17 @@ class MelSpectrogramFixed(torch.nn.Module):
         outputs[outputs < -70] = -70
         outputs[outputs > 30] = 30
         return outputs
+
+
+def channel_split_n_concat(config, multi_channel_mel_spec):
+    assert len(multi_channel_mel_spec.size()) == 4
+    n_width = config.data_config.channel_concat_width
+    n_height = config.data_config.channel_concat_height
+    assert n_height * n_width == config.data_config.n_channel
+
+    mel_specs = torch.split(multi_channel_mel_spec, 1, dim=1)
+    mel_specs_concat = torch.cat(tuple(torch.cat(tuple(mel_specs[idx + n_width * jdx] for idx in range(n_width)), dim=3) for jdx in range(n_height)), dim=2)
+
+    assert mel_specs_concat.device == multi_channel_mel_spec.device
+
+    return mel_specs_concat
