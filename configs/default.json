@@ -11,7 +11,9 @@
         "hop_length": 256,
         "f_min": 80.0,
         "f_max": 8000,
-        "n_mels": 128
+        "n_mels": 128,
+        "channel_concat_width": 2,
+        "channel_concat_height": 3
     },
     "training_config": {
         "logdir": "logs/default",

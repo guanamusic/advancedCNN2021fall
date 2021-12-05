@@ -63,10 +63,9 @@ class ChannelMasking(torch.nn.Module):
         channel_mask = torch.nn.functional.one_hot(masked_channel,
                                                    num_classes=self.n_channel).unsqueeze(2).unsqueeze(3)
         channel_mask = channel_mask.expand_as(batch)
-        channel_mask = torch.ones_like(channel_mask) - channel_mask
 
         assert channel_mask.size() == batch.size(), "WHAT ON EARTH IS GOING ON??????"
-        output = batch * channel_mask   # masking
+        output = batch * (torch.ones_like(channel_mask) - channel_mask)   # masking
 
         return output, channel_mask
 
@@ -85,3 +84,17 @@ class MelSpectrogramFixed(torch.nn.Module):
         outputs[outputs < -70] = -70
         outputs[outputs > 30] = 30
         return outputs
+
+
+def channel_split_n_concat(config, multi_channel_mel_spec):
+    assert len(multi_channel_mel_spec.size()) == 4
+    n_width = config.data_config.channel_concat_width
+    n_height = config.data_config.channel_concat_height
+    assert n_height * n_width == config.data_config.n_channel
+
+    mel_specs = torch.split(multi_channel_mel_spec, 1, dim=1)
+    mel_specs_concat = torch.cat(tuple(torch.cat(tuple(mel_specs[idx + n_width * jdx] for idx in range(n_width)), dim=3) for jdx in range(n_height)), dim=2)
+
+    assert mel_specs_concat.device == multi_channel_mel_spec.device
+
+    return mel_specs_concat
