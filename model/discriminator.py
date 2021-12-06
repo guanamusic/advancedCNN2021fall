@@ -11,7 +11,7 @@ class LocalDiscriminator(BaseModule):
         self.cnum = config.model_config.discriminator_channel_factor
 
         self.dis_conv_module = DisConvModule(self.input_dim, self.cnum)
-        self.linear = torch.nn.Linear(self.cnum*4*8*8, 1)
+        self.linear = torch.nn.Linear(self.cnum*6*8*8, 1) # original: 4*8*8
 
     def forward(self, x):
         x = self.dis_conv_module(x)
@@ -28,7 +28,7 @@ class GlobalDiscriminator(BaseModule):
         self.cnum = config.model_config.discriminator_channel_factor
 
         self.dis_conv_module = DisConvModule(self.input_dim, self.cnum)
-        self.linear = torch.nn.Linear(self.cnum*4*16*16, 1)
+        self.linear = torch.nn.Linear(self.cnum*9*16*16, 1) # original: 4*16*16
 
     def forward(self, x):
         x = self.dis_conv_module(x)
