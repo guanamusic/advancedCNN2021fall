@@ -83,6 +83,8 @@ class MelSpectrogramFixed(torch.nn.Module):
         # Clipping mel-spec value on [-70, 30]
         outputs[outputs < -70] = -70
         outputs[outputs > 30] = 30
+        # Re-scaling to [-1 1]
+        outputs = (outputs + 20) / 100
         return outputs
 
 
