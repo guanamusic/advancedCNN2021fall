@@ -1,7 +1,13 @@
 {
     "model_config": {
         "generator_channel_factor": 32,
-        "discriminator_channel_factor": 64
+        "discriminator_channel_factor": 64,
+        "coarse_l1_alpha": 1.2,
+        "l1_loss_alpha": 1.2,
+        "ae_loss_alpha": 1.2,
+        "global_wgan_loss_alpha": 1.0,
+        "gan_loss_alpha": 0.001,
+        "wgan_gp_lambda": 10
     },
     "data_config": {
         "segment_length_in_ms": 3000,
@@ -13,7 +19,9 @@
         "f_max": 8000,
         "n_mels": 128,
         "channel_concat_width": 2,
-        "channel_concat_height": 3
+        "channel_concat_height": 3,
+        "discounted_mask": true,
+        "spatial_discounting_gamma": 0.9
     },
     "training_config": {
         "logdir": "logs/default",
@@ -21,7 +29,8 @@
         "train_file_path": "chime_3_simu_only_melspec/train/",
         "validation_file_path": "chime_3_simu_only_melspec/validation/",
         "test_file_path": "chime_3_simu_only_melspec/test/",
-        "batch_size": 64,
+        "batch_size": 16,
+        "n_critic": 5,
         "lr": 1e-4,
         "grad_clip_threshold": 1,
         "scheduler_step_size": 1,

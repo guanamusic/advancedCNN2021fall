@@ -29,34 +29,25 @@ def latest_checkpoint_path(dir_path, regex="checkpoint_*.pt"):
     return x
 
 
-def load_latest_checkpoint(logdir, model, optimizer=None):
+def load_latest_checkpoint(logdir, model, optimizer_g=None, optimizer_d=None):
     latest_model_path = latest_checkpoint_path(logdir, regex="checkpoint_*.pt")
     print(f'Latest checkpoint: {latest_model_path}')
     d = torch.load(
         latest_model_path,
         map_location=lambda loc, storage: loc
     )
-    iteration = d['iteration']
-    valid_incompatible_unexp_keys = [
-        'betas',
-        'alphas',
-        'alphas_cumprod',
-        'alphas_cumprod_prev',
-        'sqrt_alphas_cumprod',
-        'sqrt_recip_alphas_cumprod',
-        'sqrt_recipm1_alphas_cumprod',
-        'posterior_log_variance_clipped',
-        'posterior_mean_coef1',
-        'posterior_mean_coef2'
-    ]
+    epoch = d['epoch']
+    valid_incompatible_unexp_keys = ['betas']
     d['model'] = {
         key: value for key, value in d['model'].items() \
             if key not in valid_incompatible_unexp_keys
     }
     model.load_state_dict(d['model'], strict=False)
-    if not isinstance(optimizer, type(None)):
-        optimizer.load_state_dict(d['optimizer'])
-    return model, optimizer, iteration
+    if not isinstance(optimizer_g, type(None)):
+        optimizer_g.load_state_dict(d['optimizer_g'])
+    if not isinstance(optimizer_d, type(None)):
+        optimizer_d.load_state_dict(d['optimizer_d'])
+    return model, optimizer_g, optimizer_d, epoch
 
 
 class ConfigWrapper(object):

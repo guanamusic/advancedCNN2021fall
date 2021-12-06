@@ -30,53 +30,55 @@ class Logger(object):
             validation_loss_txt_dummy = open(self.logdir + "/validation_loss.txt", 'a')
             validation_loss_txt_dummy.close()
 
-    def _log_losses(self, iteration, loss_stats: dict):
+    def _log_losses(self, epoch, loss_stats: dict):
         for key, value in loss_stats.items():
-            self.summary_writer.add_scalar(key, value, iteration)
+            self.summary_writer.add_scalar(key, value, epoch)
 
-    def log_training(self, iteration, stats, verbose=True):
+    def log_training(self, epoch, stats, verbose=True):
         if self.rank != 0: return
         stats = {f'training/{key}': value for key, value in stats.items()}
-        self._log_losses(iteration, loss_stats=stats)
+        self._log_losses(epoch, loss_stats=stats)
         show_message(
-            f'Iteration: {iteration} | Losses: {[value for value in stats.values()]}',
+            f'Epoch: {epoch} | Losses: {[value for value in stats.values()]}',
             verbose=verbose
         )
 
-    def log_validation(self, iteration, stats, verbose=True):
+    def log_validation(self, epoch, stats, verbose=True):
         if self.rank != 0: return
         stats = {f'validation/{key}': value for key, value in stats.items()}
-        self._log_losses(iteration, loss_stats=stats)
+        self._log_losses(epoch, loss_stats=stats)
         show_message(
-            f'Iteration: {iteration} | Losses: {[value for value in stats.values()]}',
+            f'Epoch: {epoch} | Losses: {[value for value in stats.values()]}',
             verbose=verbose
         )
         with open(self.logdir + "/validation_loss.txt", 'a') as validation_loss_txt:
-            validation_loss_txt.write(f'Iteration: {iteration} | Losses: {[value for value in stats.values()]}\n')
+            validation_loss_txt.write(f'Epoch: {epoch} | Losses: {[value for value in stats.values()]}\n')
 
     def save_model_config(self, config):
         if self.rank != 0: return
         with open(f'{self.logdir}/config.json', 'w') as f:
             json.dump(config.to_dict_type(), f)
 
-    def save_checkpoint(self, iteration, model, optimizer=None):
+    def save_checkpoint(self, epoch, model, optimizer_g=None, optimizer_d=None):
         if self.rank != 0: return
         d = {}
-        d['iteration'] = iteration
+        d['epoch'] = epoch
         d['model'] = model.state_dict()
-        if not isinstance(optimizer, type(None)):
-            d['optimizer'] = optimizer.state_dict()
-        filename = f'{self.summary_writer.log_dir}/checkpoint_{iteration}.pt'
+        if not isinstance(optimizer_g, type(None)):
+            d['optimizer_g'] = optimizer_g.state_dict()
+        if not isinstance(optimizer_d, type(None)):
+            d['optimizer_d'] = optimizer_d.state_dict()
+        filename = f'{self.summary_writer.log_dir}/checkpoint_{epoch}.pt'
         torch.save(d, filename)
 
-    def load_latest_checkpoint(self, model, optimizer=None):
+    def load_latest_checkpoint(self, model, optimizer_g=None, optimizer_d=None):
         if not self.continue_training:
             raise RuntimeError(
                 f"Trying to load the latest checkpoint from logdir {self.logdir}, "
                 "but did not set `continue_training=true` in configuration."
             )
-        model, optimizer, iteration = load_latest_checkpoint(self.logdir, model, optimizer)
-        return model, optimizer, iteration
+        model, optimizer_g, optimizer_d, epoch = load_latest_checkpoint(self.logdir, model, optimizer_g, optimizer_d)
+        return model, optimizer_g, optimizer_d, epoch
 
     def add_architecture(self, model, batch):
         self.summary_writer.add_graph(model, batch)
