@@ -25,6 +25,7 @@ def run_preprocessing(config, audio_path, target_path):
 
     audio_length = config.data_config.sample_rate * config.data_config.segment_length_in_ms // 1000
     melSpec = MelSpectrogramFixed(
+        config=config,
         sample_rate=config.data_config.sample_rate,
         n_fft=config.data_config.n_fft,
         hop_length=config.data_config.hop_length,

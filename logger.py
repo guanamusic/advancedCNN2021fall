@@ -34,12 +34,12 @@ class Logger(object):
         for key, value in loss_stats.items():
             self.summary_writer.add_scalar(key, value, epoch)
 
-    def log_training(self, epoch, stats, verbose=True):
+    def log_training(self, iteration, stats, verbose=True):
         if self.rank != 0: return
         stats = {f'training/{key}': value for key, value in stats.items()}
-        self._log_losses(epoch, loss_stats=stats)
+        self._log_losses(iteration, loss_stats=stats)
         show_message(
-            f'Epoch: {epoch} | Losses: {[value for value in stats.values()]}',
+            f'Iteration: {iteration} | Losses: {[value for value in stats.values()]}',
             verbose=verbose
         )
 

@@ -157,7 +157,7 @@ def run_training(rank, config, args):
                         'total_G_loss': loss['total_generator'].item(),
                         'grad_norm': grad_norm.item()
                     }
-                logger.log_training(epoch, loss_stats, verbose=False)
+                logger.log_training(iteration, loss_stats, verbose=False)
 
                 iteration += 1
 
