@@ -30,6 +30,17 @@ def torch_nearest_downsampler(x, factor):
     return x[:, :, :(x.size(2)//factor)*factor, :(x.size(3)//factor)*factor][:, :, ::factor, ::factor]
 
 
+def crop_only_masked_region(x, mask):
+    """
+    Semantically identical with local_patch of daa233's repo.
+    """
+    assert len(x.size()) == 4
+    # assume that all batches
+    mask_0th = mask[0]
+    _, dim_2, dim_3 = (mask_0th == 1).nonzero(as_tuple=True)
+    return x[:, :, dim_2.min():(dim_2.max()+1), dim_3.min():(dim_3.max()+1)]
+
+
 """
 The below is referred by daa233's repo.
 (https://github.com/daa233/generative-inpainting-pytorch)
@@ -192,3 +203,33 @@ def make_color_wheel():
     colorwheel[col:col + MR, 0] = 255
     return colorwheel
 
+
+def spatial_discounting_mask(config, width, height):
+    """Generate spatial discounting mask constant.
+    Spatial discounting mask is first introduced in publication:
+        Generative Image Inpainting with Contextual Attention, Yu et al.
+    Args:
+        config: Config should have configuration including HEIGHT, WIDTH,
+            DISCOUNTED_MASK.
+        width: mask width
+        height: mask height
+    Returns:
+        tf.Tensor: spatial discounting mask
+
+    WARNING!! Call only once during training!!
+    """
+    gamma = config.data_config.spatial_discounting_gamma
+    shape = [1, 1, height, width]
+    if config.data_config.discounted_mask:
+        mask_values = np.ones((height, width))
+        for i in range(height):
+            for j in range(width):
+                mask_values[i, j] = max(
+                    gamma ** min(i, height - i),
+                    gamma ** min(j, width - j))
+        mask_values = np.expand_dims(mask_values, 0)
+        mask_values = np.expand_dims(mask_values, 0)
+    else:
+        mask_values = np.ones(shape)
+    spatial_discounting_mask_tensor = torch.tensor(mask_values, dtype=torch.float32)
+    return spatial_discounting_mask_tensor.transpose(2,3)

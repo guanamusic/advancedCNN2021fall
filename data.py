@@ -67,7 +67,7 @@ class ChannelMasking(torch.nn.Module):
         assert channel_mask.size() == batch.size(), "WHAT ON EARTH IS GOING ON??????"
         output = batch * (torch.ones_like(channel_mask) - channel_mask)   # masking
 
-        return output, channel_mask
+        return output, channel_mask.type(torch.FloatTensor).to(batch.device)
 
 
 class MelSpectrogramFixed(torch.nn.Module):
@@ -83,6 +83,8 @@ class MelSpectrogramFixed(torch.nn.Module):
         # Clipping mel-spec value on [-70, 30]
         outputs[outputs < -70] = -70
         outputs[outputs > 30] = 30
+        # Re-scaling to [-1 1]
+        outputs = (outputs + 20) / 100
         return outputs
 
 

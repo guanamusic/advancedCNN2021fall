@@ -16,6 +16,8 @@ from model import Inpainter
 from data import MelSpecDataset, ChannelMasking, channel_split_n_concat
 from utils import ConfigWrapper, show_message, str2bool
 
+from tools import spatial_discounting_mask
+
 
 def run_training(rank, config, args):
     if args.n_gpus > 1:
@@ -33,12 +35,22 @@ def run_training(rank, config, args):
     channel_masking = ChannelMasking(config).cuda()
 
     show_message('Initializing optimizer, scheduler and losses...', verbose=args.verbose, rank=rank)
-    optimizer = torch.optim.Adam(params=model.parameters(),
-                                 lr=config.training_config.lr,
-                                 betas=(config.training_config.scheduler_beta_1,
-                                        config.training_config.scheduler_beta_2))
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
+    optimizer_g = torch.optim.Adam(params=model.netG.parameters(),
+                                   lr=config.training_config.lr,
+                                   betas=(config.training_config.scheduler_beta_1,
+                                          config.training_config.scheduler_beta_2))
+
+    optimizer_d = torch.optim.Adam(params=list(model.localD.parameters())+list(model.globalD.parameters()),
+                                   lr=config.training_config.lr,
+                                   betas=(config.training_config.scheduler_beta_1,
+                                          config.training_config.scheduler_beta_2))
+    scheduler_g = torch.optim.lr_scheduler.StepLR(
+        optimizer_g,
+        step_size=config.training_config.scheduler_step_size,
+        gamma=config.training_config.scheduler_gamma
+    )
+    scheduler_d = torch.optim.lr_scheduler.StepLR(
+        optimizer_d,
         step_size=config.training_config.scheduler_step_size,
         gamma=config.training_config.scheduler_gamma
     )
@@ -59,9 +71,10 @@ def run_training(rank, config, args):
 
     if config.training_config.continue_training:
         show_message('Loading latest checkpoint to continue training...', verbose=args.verbose, rank=rank)
-        model, optimizer, iteration = logger.load_latest_checkpoint(model, optimizer)
+        model, optimizer_g, optimizer_d, epoch = logger.load_latest_checkpoint(model, optimizer_g, optimizer_d)
         epoch_size = len(train_dataset) // config.training_config.batch_size
-        epoch_start = iteration // epoch_size
+        iteration = (epoch + 1) * epoch_size
+        epoch_start = epoch + 1
     else:
         iteration = 0
         epoch_start = 0
@@ -69,6 +82,10 @@ def run_training(rank, config, args):
     if args.n_gpus > 1:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
         show_message(f'INITIALIZATION IS DONE ON RANK {rank}.')
+
+    assert len(train_dataset.__getitem__(0).size()) == 3, f"{train_dataset.__getitem__(0).size()}"
+    _, width, height = train_dataset.__getitem__(0).size()
+    sd_mask = spatial_discounting_mask(config, width=width, height=height)
 
     show_message('Start training...', verbose=args.verbose, rank=rank)
     try:
@@ -83,19 +100,36 @@ def run_training(rank, config, args):
 
                 batch = batch.cuda()
                 masked_batch, mask = channel_masking(batch) # random channel is masked
+                sd_mask = sd_mask.to(batch.device)
 
                 batch = channel_split_n_concat(config, batch)
                 masked_batch = channel_split_n_concat(config, masked_batch)
                 mask = channel_split_n_concat(config, mask)
 
+                compute_g_loss = iteration % config.training_config.n_critic == 0
                 if config.training_config.use_fp16:
                     with torch.cuda.amp.autocast():
-                        loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
-                    scaler.scale(loss).backward()
-                    scaler.unscale_(optimizer)
+                        loss = (model if args.n_gpus == 1
+                                else model.module).compute_loss(masked_input=masked_batch,
+                                                                mask=mask,
+                                                                ground_truth=batch,
+                                                                spatial_discounting_mask=sd_mask,
+                                                                compute_g_loss=compute_g_loss)
+                    scaler.scale(loss['total_discriminator']).backward()
+                    scaler.unscale_(optimizer_d)
+                    if compute_g_loss:
+                        scaler.scale(loss['total_generator']).backward()
+                        scaler.unscale_(optimizer_g)
                 else:
-                    loss = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
-                    loss.backward()
+                    loss = (model if args.n_gpus == 1
+                            else model.module).compute_loss(masked_input=masked_batch,
+                                                            mask=mask,
+                                                            ground_truth=batch,
+                                                            spatial_discounting_mask=sd_mask,
+                                                            compute_g_loss=compute_g_loss)
+                    loss['total_discriminator'].backward()
+                    if compute_g_loss:
+                        loss['total_generator'].backward()
 
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     parameters=model.parameters(),
@@ -103,16 +137,27 @@ def run_training(rank, config, args):
                 )
 
                 if config.training_config.use_fp16:
-                    scaler.step(optimizer)
+                    scaler.step(optimizer_d)
+                    if compute_g_loss:
+                        scaler.step(optimizer_g)
                     scaler.update()
                 else:
-                    optimizer.step()
+                    optimizer_d.step()
+                    if compute_g_loss:
+                        optimizer_g.step()
 
-                loss_stats = {
-                    'total_loss': loss.item(),
-                    'grad_norm': grad_norm.item()
-                }
-                logger.log_training(iteration, loss_stats, verbose=False)
+                if not compute_g_loss:
+                    loss_stats = {
+                        'total_D_loss': loss['total_discriminator'].item(),
+                        'grad_norm': grad_norm.item()
+                    }
+                else:
+                    loss_stats = {
+                        'total_D_loss': loss['total_discriminator'].item(),
+                        'total_G_loss': loss['total_generator'].item(),
+                        'grad_norm': grad_norm.item()
+                    }
+                logger.log_training(epoch, loss_stats, verbose=False)
 
                 iteration += 1
 
@@ -121,32 +166,47 @@ def run_training(rank, config, args):
                 model.eval()
                 with torch.no_grad():
                     # Calculate validation set loss
-                    validation_loss = 0
+                    validation_loss_d = 0
+                    validation_loss_g = 0
                     for i, batch in enumerate(
                         tqdm(validation_dataloader) \
                         if args.verbose and rank == 0 else validation_dataloader
                     ):
                         batch = batch.cuda()    # [1, audio_length]
                         masked_batch, mask = channel_masking(batch)  # random channel is masked
+                        sd_mask = sd_mask.to(batch.device)
 
                         batch = channel_split_n_concat(config, batch)
                         masked_batch = channel_split_n_concat(config, masked_batch)
                         mask = channel_split_n_concat(config, mask)
 
-                        validation_loss_ = (model if args.n_gpus == 1 else model.module).compute_loss(masked_batch, batch)
-                        validation_loss += validation_loss_
-                    validation_loss /= (i + 1)
-                    loss_stats = {'total_loss': validation_loss.item()}
+                        validation_loss_ = (model if args.n_gpus == 1
+                                            else model.module).compute_loss(masked_input=masked_batch,
+                                                                            mask=mask,
+                                                                            ground_truth=batch,
+                                                                            spatial_discounting_mask=sd_mask,
+                                                                            compute_g_loss=True,
+                                                                            compute_d_loss=False)
+                        # validation_loss_d += validation_loss_['total_discriminator']
+                        validation_loss_g += validation_loss_['total_generator']
+                    # validation_loss_d /= (i + 1)
+                    validation_loss_g /= (i + 1)
+                    loss_stats = {
+                        # 'total_D_loss': validation_loss_d.item(),
+                        'total_G_loss': validation_loss_g.item()
+                    }
 
-                    logger.log_validation(iteration, loss_stats, verbose=args.verbose)
+                    logger.log_validation(epoch, loss_stats, verbose=args.verbose)
 
                 logger.save_checkpoint(
-                    iteration,
+                    epoch,
                     model if args.n_gpus == 1 else model.module,
-                    optimizer
+                    optimizer_g=optimizer_g,
+                    optimizer_d=optimizer_d
                 )
             if epoch % (epoch // 10 + 1) == 0:
-                scheduler.step()
+                scheduler_d.step()
+                scheduler_g.step()
     except KeyboardInterrupt:
         print('KeyboardInterrupt: training has been stopped.')
         cleanup()

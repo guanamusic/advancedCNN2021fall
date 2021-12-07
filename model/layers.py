@@ -34,4 +34,9 @@ class Conv2dBlock(BaseModule):
             raise Exception(f"Unsupported activation: {activation}")
 
     def forward(self, x):
-        return self.activation(self.conv2d(x))
+        output = x
+        if self.activation is None:
+            output = self.conv2d(output)
+        else:
+            output = self.activation(self.conv2d(output))
+        return output
