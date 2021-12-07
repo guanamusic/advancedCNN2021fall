@@ -59,7 +59,8 @@ class ChannelMasking(torch.nn.Module):
         assert batch.size()[1] == self.n_channel, f"""# of channel is {batch.size()[1]}, 
                                                     but required {self.n_channel} according config."""
 
-        masked_channel = torch.randint(low=0, high=self.n_channel, size=(batch.size()[0], )).cuda()
+        # masked_channel = torch.randint(low=0, high=self.n_channel, size=(batch.size()[0], )).cuda()
+        masked_channel = torch.randint(low=0, high=self.n_channel, size=(1, )).expand(batch.size()[0],).to(batch.device)
         channel_mask = torch.nn.functional.one_hot(masked_channel,
                                                    num_classes=self.n_channel).unsqueeze(2).unsqueeze(3)
         channel_mask = channel_mask.expand_as(batch)
