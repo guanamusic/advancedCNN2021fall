@@ -18,6 +18,8 @@
         "f_min": 80.0,
         "f_max": 8000,
         "n_mels": 128,
+        "db_max": 30,
+        "db_min": -70,
         "channel_concat_width": 2,
         "channel_concat_height": 3,
         "discounted_mask": true,
@@ -37,7 +39,7 @@
         "scheduler_gamma": 0.9,
         "scheduler_beta_1": 0.5,
         "scheduler_beta_2": 0.9,
-        "n_epoch": 100000000,
+        "n_epoch": 200,
         "validation_interval": 1,
         "use_fp16": true
     },

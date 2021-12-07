@@ -74,17 +74,19 @@ class MelSpectrogramFixed(torch.nn.Module):
     """
     make some mel_spec shit
     """
-    def __init__(self, **kwargs):
+    def __init__(self, config, **kwargs):
         super(MelSpectrogramFixed, self).__init__()
+        self.db_max = config.data_config.db_max
+        self.db_min = config.data_config.db_min
         self.torchaudio_backend = MelSpectrogram(**kwargs)
 
     def forward(self, x):
         outputs = 20 * self.torchaudio_backend(x).log10()
-        # Clipping mel-spec value on [-70, 30]
-        outputs[outputs < -70] = -70
-        outputs[outputs > 30] = 30
+        # Clipping mel-spec value on [self.db_min, self.db_max]
+        outputs[outputs < self.db_min] = self.db_min
+        outputs[outputs > self.db_max] = self.db_max
         # Re-scaling to [-1 1]
-        outputs = (outputs + 20) / 100
+        outputs = (outputs - ((self.db_max + self.db_min) / 2)) / ((self.db_max - self.db_min) / 2)
         return outputs
 
 
