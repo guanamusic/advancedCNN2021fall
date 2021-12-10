@@ -4,11 +4,11 @@ import json
 import numpy as np
 
 import torch
-import torchaudio
 
 from tqdm import tqdm
 from datetime import datetime
 
+from data import ChannelMasking, channel_split_n_concat
 from model import Inpainter
 from utils import ConfigWrapper, show_message, str2bool, parse_filelist
 
@@ -24,8 +24,8 @@ if __name__ == "__main__":
         required=True, type=str, help='checkpoint path'
     )
     parser.add_argument(
-        '-tl', '--test_filelist', required=True, type=str,
-        help='masked spectrogram filelist, files of which should be just a torch.Tensor array of shape [6, ?, ?]'
+        '-md', '--masking_mode',
+        required=True, type=str, help='channel masking mode'
     )
     parser.add_argument(
         '-sd', '--save_dir', required=True, type=str, help='directory to save the inpainted spectrogram'
@@ -49,6 +49,11 @@ if __name__ == "__main__":
     else:
         os.makedirs(args.save_dir)
 
+    if args.masking_mode == 'True':
+        channel_masking = ChannelMasking(config).cuda()
+    else:
+        raise NotImplementedError()
+
     # Initialize the model
     model = Inpainter(config)
     model.load_state_dict(torch.load(args.checkpoint_path)['model'], strict=False)
@@ -58,23 +63,26 @@ if __name__ == "__main__":
     model = model.to(device)
 
     # Inference
-    filelist = parse_filelist(args.test_filelist)
+    filelist = os.listdir(config.training_config.test_file_path)
     inference_times = []
-
-    threshold_str = filelist[0].split('/')[1].split('_')[-1]
 
     for test_path in (tqdm(filelist, leave=False) if args.verbose else filelist):
         with torch.no_grad():
             model.eval()
 
-            # input shape = [6, ?, ?]
-            masked = torch.load(test_path)
-            # assert masked.size() == torch.Size([6, ?, ?]), "Input size must be [6, ?, ?]"
-            masked = masked.to(device)
+            masked = torch.load(config.training_config.test_file_path + test_path)
+            masked = masked.to(device).unsqueeze(0)
 
-            # get some inpainted shit
+            if args.masking_mode == 'True':
+                masked, mask = channel_masking(masked)
+                masked = channel_split_n_concat(config, masked)
+                mask = channel_split_n_concat(config, mask)
+            else:
+                assert 0
+
             start = datetime.now()
-            outputs = model.forward(masked)
+            outputs = model.forward(masked, mask)
+            outputs = outputs * mask + masked * (1. - mask)
             end = datetime.now()
 
             # save it
